@@ -13,12 +13,12 @@ users = {}
 class UserRequest(BaseModel):
     username: str
     userId: str
-    email: str
+    email: EmailStr
 
 class UserResponse(BaseModel):
     userId: str
     username: str
-    email: str
+    email: EmailStr
 
 class User:
     def __init__(self, id: str, username: str, email: str, password: str):
