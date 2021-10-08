@@ -10,6 +10,6 @@ RUN pip3 install psycopg2-binary
 WORKDIR /app
 EXPOSE 8000
 COPY Commands.sh /app/
-COPY UserService.py /app/
+COPY service/UserService.py /app/
 CMD ./Commands.sh
 
