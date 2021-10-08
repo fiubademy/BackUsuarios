@@ -61,6 +61,8 @@ async def getUsers(emailFilter: Optional[str] = '', usernameFilter: Optional[str
 async def getUser(user_id= ''):
     if user_id == '':
         return JSONResponse(status_code = status.HTTP_400_BAD_REQUEST, content='Cannot search for null users.')
+    if session.query(User.username, User.user_id, User.email).filter(User.user_id == user_id).count() == 0:
+        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found.')
     try:
         user = session.query(User.username, User.user_id, User.email).filter(User.user_id == user_id).first()
     except NoResultFound as err:
