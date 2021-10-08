@@ -15,10 +15,10 @@ from sqlalchemy.orm.exc import NoResultFound
 import os
 
 #Incorporamos la DataBase a la API.
-if not os.getenv("DATABASE_URL"):
-    DATABASE_URL = "postgresql://ebpxokqoneluje:b70760e4d1c796428d0ac868f630c12ee072d735fd7b023cb4515a8eaf3c86de@ec2-18-214-214-252.compute-1.amazonaws.com:5432/d19v3l6r39tf39"
-else:
-    DATABASE_URL = os.getenv("DATABASE_URL")
+#if not os.getenv("DATABASE_URL"):
+DATABASE_URL = "postgresql://ebpxokqoneluje:b70760e4d1c796428d0ac868f630c12ee072d735fd7b023cb4515a8eaf3c86de@ec2-18-214-214-252.compute-1.amazonaws.com:5432/d19v3l6r39tf39"
+#else:
+#DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
 Base = declarative_base()
 
