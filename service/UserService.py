@@ -6,92 +6,133 @@ from starlette.responses import JSONResponse
 import uvicorn
 import uuid
 
-app = FastAPI()
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy import insert
+from sqlalchemy.orm.exc import NoResultFound
+import os
 
-users = {}
+#Incorporamos la DataBase a la API.
+#if not os.getenv("DATABASE_URL"):
+DATABASE_URL = "postgresql://ebpxokqoneluje:b70760e4d1c796428d0ac868f630c12ee072d735fd7b023cb4515a8eaf3c86de@ec2-18-214-214-252.compute-1.amazonaws.com:5432/d19v3l6r39tf39"
+#else:
+#DATABASE_URL = os.getenv("DATABASE_URL")
+engine = create_engine(DATABASE_URL)
+Base = declarative_base()
+
+app = FastAPI()
 
 class UserRequest(BaseModel):
     username: str
-    userId: str
+    user_id: str
     email: EmailStr
 
 class UserResponse(BaseModel):
-    userId: str
+    user_id: str
     username: str
     email: EmailStr
 
-class User:
-    def __init__(self, id: str, username: str, email: str, password: str):
-        self.userId =  id
-        self.username = username
-        self.email = email
-        self.password = password
+class User(Base):
+    __tablename__ = "users"
+    user_id = Column(String(500), primary_key=True, nullable=False)
+    username = Column(String(100), nullable=False, unique=True)
+    email = Column(String(500), nullable=False)
+    password = Column(String(100), nullable=False)
+
+    def __str__(self):
+        return self.username
 
 @app.get('/users', response_model = List[UserResponse], status_code=status.HTTP_200_OK)
-async def getUsers(emailFilter: Optional[str] = None, usernameFilter: Optional[str] = None):
-    if len(users) == 0:
-        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content= 'No users found in the database.')
+async def getUsers(emailFilter: Optional[str] = '', usernameFilter: Optional[str] = ''):
     mensaje = []
-    for userId, user in users.items():
-        cumpleFiltro = True
-        if(usernameFilter is not None and not user.username.startswith(usernameFilter)):
-            cumpleFiltro = False
-        if(emailFilter is not None and not user.email.startswith(emailFilter) and cumpleFiltro == True):
-            cumpleFiltro = False
-        if(cumpleFiltro):
-            mensaje.append ({'userId':userId, 'username':user.username, 'email':user.email})
+    try:
+        users = session.query(User).filter(User.email.like("%"+emailFilter+"%")).filter(User.username.like("%"+usernameFilter+"%"))
+    except NoResultFound as err:
+        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content= 'No users found in the database.')
+    if (users.count() == 0):
+        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content= 'No users found in the database.')
+    for user in users:
+        mensaje.append ({'user_id':user.user_id, 'username':user.username, 'email':user.email})
     return mensaje
 
-@app.get('/users/{userId}', response_model=UserResponse, status_code=status.HTTP_200_OK)
-async def getUser(userId= None):
-    if userId is None:
+@app.get('/users/{user_id}', response_model=UserResponse, status_code=status.HTTP_200_OK)
+async def getUser(user_id= ''):
+    if user_id == '':
         return JSONResponse(status_code = status.HTTP_400_BAD_REQUEST, content='Cannot search for null users.')
-    if (userId not in users):
-        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + userId + ' not found.')
-    return {'username': users[userId].username, 'userId': users[userId].userId, 'email': users[userId].email}
+    if session.query(User.username, User.user_id, User.email).filter(User.user_id == user_id).count() == 0:
+        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found.')
+    try:
+        user = session.query(User.username, User.user_id, User.email).filter(User.user_id == user_id).first()
+    except NoResultFound as err:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found.')
+    return {'username': user.username, 'user_id': user.user_id, 'email': user.email}
 
 @app.post('/users', response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def createUser(username, email, password):
-    userId = str(uuid.uuid4())
-    newUser = User(id=userId, username=username, email=email, password=password)
-    users[userId] = newUser
-    return {'userId':userId, 'username':username, 'email':email}
+    user_id = str(uuid.uuid4())
+    newUser = User(user_id=user_id, username=username, email=email, password=password)
+    session.add(newUser)
+    session.commit()
+    return {'user_id':user_id, 'username':username, 'email':email}
 
-@app.delete('/users/{userId}', status_code=status.HTTP_202_ACCEPTED)
-async def deleteUser(userId):
-    if (userId not in users):
-        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + userId + ' not found and will not be deleted.')
-    users.pop(userId)
-    return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content='User ' + userId + 'was deleted succesfully.')
+@app.delete('/users/{user_id}', status_code=status.HTTP_202_ACCEPTED)
+async def deleteUser(user_id):
+    try:
+        session.query(User).filter(User.user_id == user_id).first()
+    except NoResultFound as err:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found and will not be deleted.')
+    session.query(User).filter(User.user_id == user_id).delete()
+    session.commit()
+    return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content='User ' + user_id + 'was deleted succesfully.')
 
-@app.patch('/users/{userId}')
-async def patchUser(userId: str, email: Optional[str] = None, username: Optional[str] = None):
-    if(users[userId] == None):
-        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + userId + ' not found and will not be patched.')
+@app.patch('/users/{user_id}')
+async def patchUser(user_id: str, email: Optional[str] = None, username: Optional[str] = None):
+    try:
+        user = session.query(User).filter(User.user_id == user_id).first()
+    except NoResultFound as err:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found and will not be patched.')
     if(email is not None):
-        users[userId].email = email
+        user.email = email
     if(username is not None):
-        users[userId].username = username
-    return {'userId': userId, 'username':users[userId].username, 'email':users[userId].email}
+        user.username = username
+    session.add(user)
+    session.commit()
+    return {'user_id': user_id, 'username':user.username, 'email':user.email}
 
 
-@app.patch('/users/changePassword/{userId}')
-async def changePassword(userId: str, oldPassword: str, newPassword: str):
-    if(users[userId] is not None):
-        if(oldPassword != users[userId].password):
-            return JSONResponse(status_code = status.HTTP_400_BAD_REQUEST, content = 'Your old password is not correct.')
-        users[userId].password = newPassword
-        return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content = (users[userId].username +'\'s password has been correctly changed.'))
-    return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'User ' + userId + ' was not found in the database')
+@app.patch('/users/changePassword/{user_id}')
+async def changePassword(user_id: str, oldPassword: str, newPassword: str):
+    try:
+        user = session.query(User).filter(User.user_id == user_id).first()
+    except NoResultFound as err:
+        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'User ' + user_id + ' was not found in the database')
+    if(oldPassword != user.password):
+        return JSONResponse(status_code = status.HTTP_400_BAD_REQUEST, content = 'Your old password is not correct.')
+    user.password = newPassword
+    session.add(user)
+    session.commit()
+    return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content = (user.username +'\'s password has been correctly changed.'))
+    
 
-@app.patch('/users/recoverPassword/{userId}')
-async def recoverPassword(userId: str, newPassword: str):
-    if(users[userId] is not None):
-        users[userId].password = newPassword
-        return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content = (users[userId].username +'\'s password has been correctly changed.'))
-    return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'User ' + userId + ' was not found in the database')
+@app.patch('/users/recoverPassword/{user_id}')
+async def recoverPassword(user_id: str, newPassword: str):
+    try:
+        user = session.query(User).filter(User.user_id == user_id).first()
+    except NoResultFound as err:
+        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'User ' + user_id + ' was not found in the database')
+    user.password = newPassword
+    session.add(user)
+    session.commit()
+    return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content = (user.username +'\'s password has been correctly changed.'))
 
+Session = sessionmaker(bind=engine)
+session = Session()
 
 if __name__ == '__main__':
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
     uvicorn.run(app, host='0.0.0.0', port=8000)
+    
     
