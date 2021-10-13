@@ -13,6 +13,9 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy import insert
 from sqlalchemy.orm.exc import NoResultFound
 import os
+from fastapi.middleware.cors import CORSMiddleware
+
+origins = ["*"]
 
 #Incorporamos la DataBase a la API.
 #if not os.getenv("DATABASE_URL"):
@@ -23,6 +26,14 @@ engine = create_engine(DATABASE_URL)
 Base = declarative_base()
 
 app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 class UserRequest(BaseModel):
     username: str
