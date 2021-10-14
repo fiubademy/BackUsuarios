@@ -81,7 +81,7 @@ async def getUser(user_id= ''):
     return {'username': user.username, 'user_id': user.user_id, 'email': user.email}
 
 @app.post('/users', response_model=UserResponse, status_code=status.HTTP_201_CREATED)
-async def createUser(username, email, password):
+async def createUser(username: str, email: EmailStr, password: str):
     user_id = str(uuid.uuid4())
     newUser = User(user_id=user_id, username=username, email=email, password=password)
     session.add(newUser)
