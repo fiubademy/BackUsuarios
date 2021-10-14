@@ -5,15 +5,18 @@ from pydantic.main import BaseModel
 from starlette.responses import JSONResponse
 import uvicorn
 import uuid
+import hashlib
 
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, DateTime
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import insert
 from sqlalchemy.orm.exc import NoResultFound
+from sqlalchemy.exc import IntegrityError
 import os
 from fastapi.middleware.cors import CORSMiddleware
+from datetime import datetime, timedelta
 
 origins = ["*"]
 
@@ -48,12 +51,21 @@ class UserResponse(BaseModel):
 class User(Base):
     __tablename__ = "users"
     user_id = Column(String(500), primary_key=True, nullable=False)
-    username = Column(String(100), nullable=False, unique=True)
-    email = Column(String(500), nullable=False)
+    username = Column(String(100), nullable=False)
+    email = Column(String(500), nullable=False, unique=True)
     password = Column(String(100), nullable=False)
 
     def __str__(self):
         return self.username
+
+class TokensForUsers(Base):
+    __tablename__ = "tokens_for_users"
+    user_id = Column(String(500), primary_key = True, nullable = False)
+    token = Column(String, primary_key = True, nullable = False)
+    expiration_date = Column(DateTime, nullable = False)
+
+    def __str__(self):
+        return self.token
 
 @app.get('/users', response_model = List[UserResponse], status_code=status.HTTP_200_OK)
 async def getUsers(emailFilter: Optional[str] = '', usernameFilter: Optional[str] = ''):
@@ -80,12 +92,38 @@ async def getUser(user_id= ''):
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found.')
     return {'username': user.username, 'user_id': user.user_id, 'email': user.email}
 
+@app.get('/users/get_token/{user_id}', response_model=str, status_code=status.HTTP_200_OK)
+async def getTokenForRecPasswd(user_id:str):
+
+    token = str(uuid.uuid4())
+    token_for_users = TokensForUsers(user_id=user_id, token=token, expiration_date = (datetime.now() + timedelta(days=1)))
+
+    # Veo que el usuario exista en mi red de usuarios
+    try:
+        user = session.query(User.username, User.user_id, User.email).filter(User.user_id == user_id).first()
+    except NoResultFound as err:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found.')
+    if not user:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found.')
+
+    # Busco a ver si hay tokens existentes y los elimino.
+    session.query(TokensForUsers).filter(TokensForUsers.user_id == user_id).delete()
+
+    # Genero el nuevo token y lo devuevo
+    session.add(token_for_users)
+    session.commit()
+    return token
+
 @app.post('/users', response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def createUser(username: str, email: EmailStr, password: str):
     user_id = str(uuid.uuid4())
-    newUser = User(user_id=user_id, username=username, email=email, password=password)
+    newUser = User(user_id=user_id, username=username, email=email, password=(hashlib.sha256(password.encode())).hexdigest())
     session.add(newUser)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        return JSONResponse(status_code=status.HTTP_406_NOT_ACCEPTABLE, content='Email ' + email + ' already registered as a user.')
     return {'user_id':user_id, 'username':username, 'email':email}
 
 @app.delete('/users/{user_id}', status_code=status.HTTP_202_ACCEPTED)
@@ -96,7 +134,7 @@ async def deleteUser(user_id):
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found and will not be deleted.')
     session.query(User).filter(User.user_id == user_id).delete()
     session.commit()
-    return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content='User ' + user_id + 'was deleted succesfully.')
+    return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content='User ' + user_id + ' was deleted succesfully.')
 
 @app.patch('/users/{user_id}')
 async def patchUser(user_id: str, email: Optional[str] = None, username: Optional[str] = None):
@@ -119,22 +157,28 @@ async def changePassword(user_id: str, oldPassword: str, newPassword: str):
         user = session.query(User).filter(User.user_id == user_id).first()
     except NoResultFound as err:
         return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'User ' + user_id + ' was not found in the database')
-    if(oldPassword != user.password):
+    if(hashlib.sha256(oldPassword.encode()).hexdigest() != user.password):
         return JSONResponse(status_code = status.HTTP_400_BAD_REQUEST, content = 'Your old password is not correct.')
-    user.password = newPassword
+    user.password = hashlib.sha256(newPassword.encode()).hexdigest()
     session.add(user)
     session.commit()
     return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content = (user.username +'\'s password has been correctly changed.'))
     
 
 @app.patch('/users/recoverPassword/{user_id}')
-async def recoverPassword(user_id: str, newPassword: str):
+async def recoverPassword(user_id: str, newPassword: str, token:str):
     try:
         user = session.query(User).filter(User.user_id == user_id).first()
+        token_in_db = session.query(TokensForUsers).filter(TokensForUsers.token == token).filter(TokensForUsers.user_id == user_id).first()
     except NoResultFound as err:
-        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'User ' + user_id + ' was not found in the database')
-    user.password = newPassword
+        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'Error: Token/User does not exist in the database.')
+    if not token_in_db:
+        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'Token not available in the database.')
+    if (token_in_db.expiration_date <= datetime.now()):
+        return JSONResponse(status_code = status.HTTP_401_UNAUTHORIZED, content = 'Error: Token has expired in date: ' + str(token_in_db.expiration_date))
+    user.password = (hashlib.sha256(newPassword.encode())).hexdigest()
     session.add(user)
+    session.query(TokensForUsers).filter(TokensForUsers.user_id == user_id).delete()
     session.commit()
     return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content = (user.username +'\'s password has been correctly changed.'))
 
