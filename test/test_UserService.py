@@ -1,5 +1,6 @@
 import pytest
 import asyncio
+import json
 from fastapi import status
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
@@ -9,6 +10,11 @@ from sqlalchemy import insert
 from sqlalchemy.orm.exc import NoResultFound
 
 from service import UserService
+import hashlib
+
+@pytest.mark.asyncio
+async def get_token(user_id):
+    return await UserService.getTokenForRecPasswd(user_id = user_id)
 
 @pytest.mark.asyncio
 async def run_post():
@@ -39,8 +45,8 @@ async def change_password(user_id, oldPass, newPass):
     return await UserService.changePassword(user_id = user_id, oldPassword=oldPass, newPassword=newPass)
 
 @pytest.mark.asyncio
-async def recover_password(user_id, newPass):
-    return await UserService.recoverPassword(user_id = user_id, newPassword=newPass)
+async def recover_password(user_id, newPass, token):
+    return await UserService.recoverPassword(user_id = user_id, newPassword=newPass, token=token)
 
 def test_post_to_db_correctly():
     user_id = asyncio.run(run_post())["user_id"]
@@ -81,7 +87,8 @@ def test_change_password_correctly():
 def test_recover_password():
     user_id = asyncio.run(run_post())["user_id"]
     user_obtained = asyncio.run(run_get_by_id(user_id))
-    assert asyncio.run(recover_password(user_id, '1234567')).status_code == status.HTTP_202_ACCEPTED
+    token = asyncio.run(get_token(user_id))
+    assert asyncio.run(recover_password(user_id, '1234567', token)).status_code == status.HTTP_202_ACCEPTED
     asyncio.run(run_delete(user_id))
 
 
