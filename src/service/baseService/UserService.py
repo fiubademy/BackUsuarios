@@ -1,15 +1,14 @@
 from fastapi import FastAPI, status
 import uvicorn
+import sys
 import os
 from fastapi.middleware.cors import CORSMiddleware
-from src.service.calls import ApiCalls
-from src.service.DataBase import Base, engine
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+from baseService.DataBase import Base, engine
+from calls import ApiCalls
+
 
 origins = ["*"]
-
-
-#Incorporamos la DataBase a la API.
-
 
 app = FastAPI()
 

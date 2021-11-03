@@ -2,7 +2,10 @@ from typing import Optional
 from pydantic import EmailStr
 from pydantic.main import BaseModel
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, DateTime, Float
-from src.service.DataBase import Base
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+from baseService.DataBase import Base
 
 class UserRequest(BaseModel):
     username: str

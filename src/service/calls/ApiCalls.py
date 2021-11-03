@@ -12,7 +12,10 @@ from sqlalchemy.orm.exc import NoResultFound
 from sqlalchemy.exc import IntegrityError
 from fastapi import APIRouter
 from datetime import datetime, timedelta
-from src.service.models.Models import UserRequest, UserResponse, User, TokensForUsers
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
+from models.Models import UserRequest, UserResponse, User, TokensForUsers
 import uuid
 import hashlib
 

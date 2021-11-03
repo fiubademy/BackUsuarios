@@ -1,6 +1,9 @@
 import pytest
 import asyncio
 import json
+import sys
+import os
+import hashlib
 from fastapi import status
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy import Boolean, Column, ForeignKey, Integer, String
@@ -8,10 +11,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import insert
 from sqlalchemy.orm.exc import NoResultFound
-
-from src.service.calls import ApiCalls
-from src.service.DataBase import test_engine, Base
-import hashlib
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "service"))
+from calls import ApiCalls
+from baseService.DataBase import test_engine, Base
 
 @pytest.mark.asyncio
 async def get_token(user_id):
