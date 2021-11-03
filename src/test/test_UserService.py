@@ -39,7 +39,7 @@ async def run_post_second_user():
 
 @pytest.mark.asyncio
 async def run_patch(user_id, email=None, username=None):
-    return await ApiCalls.patchUser(user_id = user_id, email=email, username=username).json()
+    return await ApiCalls.patchUser(user_id = user_id, email=email, username=username)
 
 @pytest.mark.asyncio
 async def change_password(user_id, oldPass, newPass):
@@ -127,7 +127,7 @@ def test_sub_level():
 def test_location():
     user_id = asyncio.run(run_post())["user_id"]
     user_obtained = asyncio.run(run_get_by_id(user_id))
-    assert asyncio.run(set_sub(user_id,-45.33, -75.55)).status_code == status.HTTP_202_ACCEPTED
+    assert asyncio.run(set_location(user_id,-45.33, -75.55)).status_code == status.HTTP_202_ACCEPTED
     asyncio.run(run_delete(user_id))
 
 
