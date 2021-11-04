@@ -19,6 +19,8 @@ class UserResponse(BaseModel):
     latitude: Optional[float]
     longitude: Optional[float]
     sub_level: Optional[int]
+    is_blocked: str
+    user_type: str
 
 class User(Base):
     __tablename__ = "users"
@@ -29,6 +31,8 @@ class User(Base):
     latitude = Column(Float, nullable = True)
     longitude = Column(Float, nullable = True)
     sub_level = Column(Integer, nullable=True)
+    is_blocked = Column(String(5), nullable=False)
+    user_type = Column(String(20), nullable=False)
 
     def __str__(self):
         return self.username

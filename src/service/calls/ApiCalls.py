@@ -44,7 +44,14 @@ async def getUsers(page_num: int, emailFilter: Optional[str] = '', usernameFilte
     if (users.count() == 0):
         return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content= 'No users found in page ' + str(page_num) + ' in the database.')
     for user in users:
-        mensaje.append ({'user_id':user.user_id, 'username':user.username, 'email':user.email, 'latitude':user.latitude, 'longitude': user.longitude, 'sub_level': user.sub_level})
+        mensaje.append ({'user_id':user.user_id, 
+                        'username':user.username, 
+                        'email':user.email, 
+                        'latitude':user.latitude, 
+                        'longitude': user.longitude, 
+                        'sub_level': user.sub_level,
+                        'is_blocked': user.is_blocked,
+                        'user_type': user.user_type})
     return mensaje
 
 @router.get('/ID/{user_id}', response_model=UserResponse, status_code=status.HTTP_200_OK)
@@ -57,7 +64,14 @@ async def getUser(user_id= ''):
         user = session.query(User).filter(User.user_id == user_id).first()
     except NoResultFound as err:
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found.')
-    return{'user_id':user.user_id, 'username':user.username, 'email':user.email, 'latitude':user.latitude, 'longitude': user.longitude, 'sub_level': user.sub_level}
+    return{'user_id':user.user_id, 
+            'username':user.username, 
+            'email':user.email, 
+            'latitude':user.latitude, 
+            'longitude': user.longitude, 
+            'sub_level': user.sub_level,
+            'is_blocked': user.is_blocked,
+            'user_type': user.user_type}
 
 @router.get('/get_token/{user_id}', response_model=str, status_code=status.HTTP_200_OK)
 async def getTokenForRecPasswd(user_id:str):
@@ -90,20 +104,58 @@ async def createUser(username: str, email: EmailStr, password: str):
                     password=(hashlib.sha256(password.encode())).hexdigest(),
                     latitude = null(),
                     longitude = null(),
-                    sub_level = null())
+                    sub_level = null(),
+                    is_blocked = 'N',
+                    user_type = 'USER')
     session.add(newUser)
     try:
         session.commit()
     except IntegrityError:
         session.rollback()
         return JSONResponse(status_code=status.HTTP_406_NOT_ACCEPTABLE, content='Email ' + email + ' already registered as a user.')
-    return {'user_id':newUser.user_id, 'username':newUser.username, 'email':newUser.email, 'latitude':newUser.latitude, 'longitude': newUser.longitude, 'sub_level': newUser.sub_level}
+    return {'user_id':newUser.user_id, 
+            'username':newUser.username, 
+            'email':newUser.email, 
+            'latitude':newUser.latitude, 
+            'longitude': newUser.longitude, 
+            'sub_level': newUser.sub_level,
+            'is_blocked': newUser.is_blocked,
+            'user_type': newUser.user_type}
+
+@router.post('/createAdmin', response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def createAdmin(username: str, email: EmailStr, password: str):
+    user_id = str(uuid.uuid4())
+    newUser = User(user_id=user_id, 
+                    username=username, 
+                    email=email, 
+                    password=(hashlib.sha256(password.encode())).hexdigest(),
+                    latitude = null(),
+                    longitude = null(),
+                    sub_level = null(),
+                    is_blocked = 'N',
+                    user_type = 'ADMIN')
+    session.add(newUser)
+    try:
+        session.commit()
+    except IntegrityError:
+        session.rollback()
+        return JSONResponse(status_code=status.HTTP_406_NOT_ACCEPTABLE, content='Email ' + email + ' already registered as a user.')
+    return {'user_id':newUser.user_id, 
+            'username':newUser.username, 
+            'email':newUser.email, 
+            'latitude':newUser.latitude, 
+            'longitude': newUser.longitude, 
+            'sub_level': newUser.sub_level,
+            'is_blocked': newUser.is_blocked,
+            'user_type': newUser.user_type}
 
 @router.delete('/{user_id}', status_code=status.HTTP_202_ACCEPTED)
 async def deleteUser(user_id):
     try:
-        session.query(User).filter(User.user_id == user_id).first()
+        user = session.query(User).filter(User.user_id == user_id).first()
     except NoResultFound as err:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found and will not be deleted.')
+    if not user:
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found and will not be deleted.')
     session.query(User).filter(User.user_id == user_id).delete()
     session.commit()
@@ -113,6 +165,10 @@ async def deleteUser(user_id):
 async def patchUser(user_id: str, email: Optional[str] = None, username: Optional[str] = None):
     try:
         user = session.query(User).filter(User.user_id == user_id).first()
+        if email != None:
+            check_non_repeated = session.query(User).filter(User.email == email).first()
+            if check_non_repeated != None:
+                return JSONResponse(status_code = status.HTTP_400_BAD_REQUEST, content = 'Email '+ email +' is already in use. User has not been patched.')
     except NoResultFound as err:
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found and will not be patched.')
     if(email is not None):
@@ -121,7 +177,14 @@ async def patchUser(user_id: str, email: Optional[str] = None, username: Optiona
         user.username = username
     session.add(user)
     session.commit()
-    return {'user_id':user.user_id, 'username':user.username, 'email':user.email, 'latitude':user.latitude, 'longitude': user.longitude, 'sub_level': user.sub_level}
+    return {'user_id':user.user_id, 
+            'username':user.username, 
+            'email':user.email, 
+            'latitude':user.latitude, 
+            'longitude': user.longitude, 
+            'sub_level': user.sub_level,
+            'is_blocked': user.is_blocked,
+            'user_type': user.user_type}
 
 
 @router.patch('/changePassword/{user_id}')
@@ -139,10 +202,12 @@ async def changePassword(user_id: str, oldPassword: str, newPassword: str):
     
 
 @router.patch('/recoverPassword/{user_id}')
-async def recoverPassword(user_id: str, newPassword: str, token:str):
+async def recoverPassword(email: str, newPassword: str, token:str):
     try:
-        user = session.query(User).filter(User.user_id == user_id).first()
-        token_in_db = session.query(TokensForUsers).filter(TokensForUsers.token == token).filter(TokensForUsers.user_id == user_id).first()
+        user = session.query(User).filter(User.email == email).first()
+        if not user:
+            return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'Error: User does not exist in the database.')
+        token_in_db = session.query(TokensForUsers).filter(TokensForUsers.token == token).filter(TokensForUsers.user_id == user.user_id).first()
     except NoResultFound as err:
         return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'Error: Token/User does not exist in the database.')
     if not token_in_db:
@@ -151,7 +216,7 @@ async def recoverPassword(user_id: str, newPassword: str, token:str):
         return JSONResponse(status_code = status.HTTP_401_UNAUTHORIZED, content = 'Error: Token has expired in date: ' + str(token_in_db.expiration_date))
     user.password = (hashlib.sha256(newPassword.encode())).hexdigest()
     session.add(user)
-    session.query(TokensForUsers).filter(TokensForUsers.user_id == user_id).delete()
+    session.query(TokensForUsers).filter(TokensForUsers.user_id == user.user_id).delete()
     session.commit()
     return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content = (user.username +'\'s password has been correctly changed.'))
 
@@ -187,3 +252,45 @@ async def setLocation(user_id: str, latitude: float, longitude: float):
     session.add(user)
     session.commit()
     return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content = (user.username +'\'s location has been correctly set.'))
+
+@router.patch('/{user_id}/toggleBlock')
+async def toggleBlockUser(user_id: str):
+    try:
+        user = session.query(User).filter(User.user_id == user_id).first()
+    except NoResultFound as err:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found.')
+    if not user:
+        return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found.')
+    print(user)
+    if user.is_blocked == "N":
+        user.is_blocked = "Y"
+    elif user.is_blocked == "Y":
+        user.is_blocked = "N"
+    session.add(user)
+    session.commit()
+    return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content = user.username +"'s block state has been toggled.")
+
+@router.post('/login')
+async def loginUser(email:str, password:str):
+    try:
+        user = session.query(User).filter(User.email == email).filter(User.user_type == 'USER').first()
+    except NoResultFound as err:
+        return JSONResponse(status_code = status.HTTP_401_UNAUTHORIZED, content = "User with that email does not exist in the database.")
+    if not user:
+        return JSONResponse(status_code = status.HTTP_401_UNAUTHORIZED, content = "User with that email does not exist in the database.")
+    if user.password != hashlib.sha256(password.encode()).hexdigest():
+        return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content="Wrong password for that user.")
+    return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content = user.user_id)
+
+@router.post('/loginAdmin')
+async def loginAdmin(email:str, password:str):
+    try:
+        user = session.query(User).filter(User.email == email).filter(User.user_type == 'ADMIN').first()
+    except NoResultFound as err:
+        return JSONResponse(status_code = status.HTTP_401_UNAUTHORIZED, content = "Admin with that email does not exist in the database.")
+    if not user:
+        return JSONResponse(status_code = status.HTTP_401_UNAUTHORIZED, content = "Admin with that email does not exist in the database.")
+    if user.password != hashlib.sha256(password.encode()).hexdigest():
+        return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content="Wrong password for that Admin user.")
+    return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content = user.user_id)
+
