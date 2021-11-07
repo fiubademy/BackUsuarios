@@ -18,8 +18,8 @@ import requests
 
 
 @pytest.mark.asyncio
-async def get_token(user_id):
-    return await ApiCalls.getTokenForRecPasswd(user_id = user_id)
+async def get_token(email):
+    return await ApiCalls.getTokenForRecPasswd(email = email)
 
 @pytest.mark.asyncio
 async def run_post():
@@ -172,7 +172,7 @@ def test_change_password_with_wrong_old_password_fails():
 def test_recover_password():
     user_id = asyncio.run(run_post())["user_id"]
     user_obtained = asyncio.run(run_get_by_id(user_id))
-    token = asyncio.run(get_token(user_id))
+    token = asyncio.run(get_token(user_obtained['email']))
     assert asyncio.run(recover_password('asdasd@qwe.com', '1234567', token)).status_code == status.HTTP_202_ACCEPTED
     asyncio.run(run_delete(user_id))
 

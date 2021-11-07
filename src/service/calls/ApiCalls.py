@@ -73,10 +73,14 @@ async def getUser(user_id= ''):
             'is_blocked': user.is_blocked,
             'user_type': user.user_type}
 
-@router.get('/get_token/{user_id}', response_model=str, status_code=status.HTTP_200_OK)
-async def getTokenForRecPasswd(user_id:str):
+@router.post('/get_token', response_model=str, status_code=status.HTTP_200_OK)
+async def getTokenForRecPasswd(email:str):
 
     token = str(uuid.uuid4())
+    user = session.query(User).filter(User.email == email).first()
+    user_id = user.user_id
+    if not user:
+        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'User with email ' + email + ' does not exist in the database')
     token_for_users = TokensForUsers(user_id=user_id, token=token, expiration_date = (datetime.now() + timedelta(days=1)))
 
     # Veo que el usuario exista en mi red de usuarios
