@@ -1,1 +1,1 @@
-uvicorn service.UserService:app --reload
+uvicorn src.service.baseService.UserService:app --reload
