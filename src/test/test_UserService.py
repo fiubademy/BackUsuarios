@@ -54,8 +54,8 @@ async def change_password(user_id, oldPass, newPass):
     return await ApiCalls.changePassword(user_id = user_id, oldPassword=oldPass, newPassword=newPass)
 
 @pytest.mark.asyncio
-async def recover_password(email, newPass, token):
-    return await ApiCalls.recoverPassword(email = email, newPassword=newPass, token=token)
+async def recover_password(newPass, token):
+    return await ApiCalls.recoverPassword(newPassword=newPass, token=token)
 
 @pytest.mark.asyncio
 async def set_sub(user_id, sub_level):
@@ -173,13 +173,13 @@ def test_recover_password():
     user_id = asyncio.run(run_post())["user_id"]
     user_obtained = asyncio.run(run_get_by_id(user_id))
     token = asyncio.run(get_token(user_obtained['email']))
-    assert asyncio.run(recover_password('asdasd@qwe.com', '1234567', token)).status_code == status.HTTP_202_ACCEPTED
+    assert asyncio.run(recover_password('1234567', token)).status_code == status.HTTP_202_ACCEPTED
     asyncio.run(run_delete(user_id))
 
 def test_recover_password_without_existing_token():
     user_id = asyncio.run(run_post())["user_id"]
     user_obtained = asyncio.run(run_get_by_id(user_id))
-    assert asyncio.run(recover_password('asdasd@qwe.com', '1234567', 'unexistentToken')).status_code == status.HTTP_404_NOT_FOUND
+    assert asyncio.run(recover_password('1234567', 'unexistentToken')).status_code == status.HTTP_404_NOT_FOUND
     asyncio.run(run_delete(user_id))
 
 def test_sub_level():
