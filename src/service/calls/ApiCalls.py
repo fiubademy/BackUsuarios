@@ -205,10 +205,14 @@ async def changePassword(user_id: str, oldPassword: str, newPassword: str):
     return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content = (user.username +'\'s password has been correctly changed.'))
     
 
-@router.patch('/recoverPassword/{user_id}')
-async def recoverPassword(email: str, newPassword: str, token:str):
+@router.patch('/recoverPassword/{token}')
+async def recoverPassword(newPassword: str, token:str):
     try:
-        user = session.query(User).filter(User.email == email).first()
+        tok_user = session.query(TokensForUsers).filter(TokensForUsers.token == token).first()
+        if not tok_user:
+            return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'Error: Token not existent')
+        user_id = tok_user.user_id
+        user = session.query(User).filter(User.user_id == user_id).first()
         if not user:
             return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'Error: User does not exist in the database.')
         token_in_db = session.query(TokensForUsers).filter(TokensForUsers.token == token).filter(TokensForUsers.user_id == user.user_id).first()
