@@ -53,7 +53,11 @@ async def getUsers(page_num: int, emailFilter: Optional[str] = '', usernameFilte
                         'sub_level': user.sub_level,
                         'is_blocked': user.is_blocked,
                         'user_type': user.user_type})
-    return {'num_pages': int(count/PER_PAGE) + 1,'content':mensaje}
+    if (count/PER_PAGE - int(count/PER_PAGE) == 0):
+        num_pages = int(count/PER_PAGE)
+    else:
+        num_pages = int(count/PER_PAGE)+1    
+    return {'num_pages': num_pages,'content':mensaje}
 
 @router.get('/ID/{user_id}', response_model=UserResponse, status_code=status.HTTP_200_OK)
 async def getUser(user_id= ''):
