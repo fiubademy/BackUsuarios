@@ -34,10 +34,11 @@ def set_engine(engine_rcvd):
     Session = sessionmaker(bind=engine)
     session = Session()
 
-@router.get('/{page_num}', response_model = List[UserResponse], status_code=status.HTTP_200_OK)
+@router.get('/{page_num}', status_code=status.HTTP_200_OK)
 async def getUsers(page_num: int, emailFilter: Optional[str] = '', usernameFilter: Optional[str] = ''):
     mensaje = []
     try:
+        count = session.query(User).filter(User.email.like("%"+emailFilter+"%")).filter(User.username.like("%"+usernameFilter+"%")).count()
         users = session.query(User).filter(User.email.like("%"+emailFilter+"%")).filter(User.username.like("%"+usernameFilter+"%")).limit(PER_PAGE).offset((page_num-1) * PER_PAGE)
     except NoResultFound as err:
         return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content= 'No users found in page ' + str(page_num) + ' in the database.')
@@ -52,7 +53,7 @@ async def getUsers(page_num: int, emailFilter: Optional[str] = '', usernameFilte
                         'sub_level': user.sub_level,
                         'is_blocked': user.is_blocked,
                         'user_type': user.user_type})
-    return mensaje
+    return {'num_pages': int(count/PER_PAGE) + 1,'content':mensaje}
 
 @router.get('/ID/{user_id}', response_model=UserResponse, status_code=status.HTTP_200_OK)
 async def getUser(user_id= ''):
