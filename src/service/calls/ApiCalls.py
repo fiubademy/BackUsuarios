@@ -109,7 +109,7 @@ async def createUser(username: str, email: EmailStr, password: str):
                     password=(hashlib.sha256(password.encode())).hexdigest(),
                     latitude = null(),
                     longitude = null(),
-                    sub_level = null(),
+                    sub_level = 0,
                     is_blocked = 'N',
                     user_type = 'USER')
     session.add(newUser)
