@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from models.Models import UserRequest, UserResponse, User, TokensForUsers
+from models.Models import *
 import uuid
 import hashlib
 
@@ -52,7 +52,8 @@ async def getUsers(page_num: int, emailFilter: Optional[str] = '', usernameFilte
                         'longitude': user.longitude, 
                         'sub_level': user.sub_level,
                         'is_blocked': user.is_blocked,
-                        'user_type': user.user_type})
+                        'user_type': user.user_type,
+                        'is_federated': user.is_federated})
     if (count/PER_PAGE - int(count/PER_PAGE) == 0):
         num_pages = int(count/PER_PAGE)
     else:
@@ -76,7 +77,8 @@ async def getUser(user_id= ''):
             'longitude': user.longitude, 
             'sub_level': user.sub_level,
             'is_blocked': user.is_blocked,
-            'user_type': user.user_type}
+            'user_type': user.user_type,
+            'is_federated': user.is_federated}
 
 @router.post('/get_token', response_model=str, status_code=status.HTTP_200_OK)
 async def getTokenForRecPasswd(email:str):
@@ -106,6 +108,8 @@ async def getTokenForRecPasswd(email:str):
 
 @router.post('/', response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def createUser(username: str, email: EmailStr, password: str):
+    if len(password) < 8:
+        return JSONResponse(status_code = status.HTTP_406_NOT_ACCEPTABLE, content = 'Password has less than 8 characters. It does not meet the minimum security requirements.')
     user_id = str(uuid.uuid4())
     newUser = User(user_id=user_id, 
                     username=username, 
@@ -115,7 +119,8 @@ async def createUser(username: str, email: EmailStr, password: str):
                     longitude = null(),
                     sub_level = 0,
                     is_blocked = 'N',
-                    user_type = 'USER')
+                    user_type = 'USER',
+                    is_federated = 'N')
     session.add(newUser)
     try:
         session.commit()
@@ -129,10 +134,13 @@ async def createUser(username: str, email: EmailStr, password: str):
             'longitude': newUser.longitude, 
             'sub_level': newUser.sub_level,
             'is_blocked': newUser.is_blocked,
-            'user_type': newUser.user_type}
+            'user_type': newUser.user_type,
+            'is_federated': newUser.is_federated}
 
 @router.post('/createAdmin', response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def createAdmin(username: str, email: EmailStr, password: str):
+    if len(password) < 8:
+        return JSONResponse(status_code = status.HTTP_406_NOT_ACCEPTABLE, content = 'Password has less than 8 characters. It does not meet the minimum security requirements.')
     user_id = str(uuid.uuid4())
     newUser = User(user_id=user_id, 
                     username=username, 
@@ -142,7 +150,8 @@ async def createAdmin(username: str, email: EmailStr, password: str):
                     longitude = null(),
                     sub_level = null(),
                     is_blocked = 'N',
-                    user_type = 'ADMIN')
+                    user_type = 'ADMIN',
+                    is_federated = 'N')
     session.add(newUser)
     try:
         session.commit()
@@ -156,7 +165,8 @@ async def createAdmin(username: str, email: EmailStr, password: str):
             'longitude': newUser.longitude, 
             'sub_level': newUser.sub_level,
             'is_blocked': newUser.is_blocked,
-            'user_type': newUser.user_type}
+            'user_type': newUser.user_type,
+            'is_federated': newUser.is_federated}
 
 @router.delete('/{user_id}', status_code=status.HTTP_202_ACCEPTED)
 async def deleteUser(user_id):
@@ -193,11 +203,14 @@ async def patchUser(user_id: str, email: Optional[str] = None, username: Optiona
             'longitude': user.longitude, 
             'sub_level': user.sub_level,
             'is_blocked': user.is_blocked,
-            'user_type': user.user_type}
+            'user_type': user.user_type,
+            'is_federated': user.is_federated}
 
 
 @router.patch('/changePassword/{user_id}')
 async def changePassword(user_id: str, oldPassword: str, newPassword: str):
+    if len(newPassword) < 8:
+        return JSONResponse(status_code = status.HTTP_406_NOT_ACCEPTABLE, content = 'Password has less than 8 characters. It does not meet the minimum security requirements.')
     try:
         user = session.query(User).filter(User.user_id == user_id).first()
     except NoResultFound as err:
@@ -212,6 +225,8 @@ async def changePassword(user_id: str, oldPassword: str, newPassword: str):
 
 @router.patch('/recoverPassword/{token}')
 async def recoverPassword(newPassword: str, token:str):
+    if len(newPassword) < 8:
+        return JSONResponse(status_code = status.HTTP_406_NOT_ACCEPTABLE, content = 'Password has less than 8 characters. It does not meet the minimum security requirements.')
     try:
         tok_user = session.query(TokensForUsers).filter(TokensForUsers.token == token).first()
         if not tok_user:
@@ -306,4 +321,78 @@ async def loginAdmin(email:str, password:str):
     if user.password != hashlib.sha256(password.encode()).hexdigest():
         return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content="Wrong password for that Admin user.")
     return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content = user.user_id)
+
+@router.post('/loginGoogle')
+async def loginGoogle(idGoogle:str, username:str, email:EmailStr):
+    relation = session.query(RelationGoogleAndUser).filter(RelationGoogleAndUser.id_google == idGoogle).first()
+    if not relation:
+        user_id = str(uuid.uuid4())
+        user = User(user_id=user_id, 
+                        username=username, 
+                        email=email, 
+                        password=null(),
+                        latitude = null(),
+                        longitude = null(),
+                        sub_level = 0,
+                        is_blocked = 'N',
+                        user_type = 'USER',
+                        is_federated = 'Y')
+        relation = RelationGoogleAndUser(id_google = idGoogle, user_id = user_id)
+
+        session.add(user)
+        session.add(relation)
+        try:
+            session.commit()
+        except IntegrityError:
+            session.rollback()
+            return JSONResponse(status_code=status.HTTP_406_NOT_ACCEPTABLE, content='Integrity Error when trying to sign up new Google\'s user. Possibly the email is already an user.')
+        return JSONResponse(status_code = status.HTTP_201_CREATED,
+        content = {'user_id':user.user_id, 
+                'username':user.username, 
+                'email':user.email, 
+                'latitude':user.latitude, 
+                'longitude': user.longitude, 
+                'sub_level': user.sub_level,
+                'is_blocked': user.is_blocked,
+                'user_type': user.user_type,
+                'is_federated': user.is_federated})
+    else:
+        user_id = relation.user_id
+        user = session.query(User).filter(User.user_id == user_id).first()
+        if not user:
+            return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content='User was not found with the User ID linked to Google\'s account in the DataBase.')
+        elif user.username != username:
+            return JSONResponse(status_code = status.HTTP_401_UNAUTHORIZED, content = "Wrong username with Google's Account.")
+        elif user.email != email:
+            return JSONResponse(status_code = status.HTTP_401_UNAUTHORIZED, content = "Wrong email with Google's Account.")
+        return JSONResponse(status_code = status.HTTP_202_ACCEPTED,
+            content = {'user_id':user.user_id, 
+                    'username':user.username, 
+                    'email':user.email, 
+                    'latitude':user.latitude, 
+                    'longitude': user.longitude, 
+                    'sub_level': user.sub_level,
+                    'is_blocked': user.is_blocked,
+                    'user_type': user.user_type,
+                    'is_federated': user.is_federated})
+
+
+@router.delete('/deleteGoogle')
+async def deleteGoogleUser(idGoogle):
+    relation = session.query(RelationGoogleAndUser).filter(RelationGoogleAndUser.id_google == idGoogle).first()
+    if not relation:
+        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'That user does not exist in the database.')
+    user_id = relation.user_id
+    session.query(RelationGoogleAndUser).filter(RelationGoogleAndUser.id_google == idGoogle).delete()
+    user = session.query(User).filter(User.user_id == user_id)
+    if not user:
+        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'That user does not exist in the database.')
+    session.query(User).filter(User.user_id == user_id).delete()
+    session.commit()
+    
+
+    
+
+
+    
 

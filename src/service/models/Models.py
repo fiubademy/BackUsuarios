@@ -1,7 +1,7 @@
 from typing import Optional
 from pydantic import EmailStr
 from pydantic.main import BaseModel
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, DateTime, Float
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, DateTime, Float, CheckConstraint
 import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
@@ -27,12 +27,17 @@ class User(Base):
     user_id = Column(String(500), primary_key=True, nullable=False)
     username = Column(String(100), nullable=False)
     email = Column(String(500), nullable=False, unique=True)
-    password = Column(String(100), nullable=False)
+    password = Column(String(100))
     latitude = Column(Float, nullable = True)
     longitude = Column(Float, nullable = True)
     sub_level = Column(Integer, nullable=True)
     is_blocked = Column(String(5), nullable=False)
     user_type = Column(String(20), nullable=False)
+    is_federated = Column(String(5))
+    __table_args__ = (
+        CheckConstraint("NOT(password IS NULL AND is_federated != 'Y')"),
+        CheckConstraint("NOT(password IS NOT NULL AND is_federated = 'Y')")
+    )
 
     def __str__(self):
         return self.username
@@ -45,3 +50,12 @@ class TokensForUsers(Base):
 
     def __str__(self):
         return self.token
+
+
+class RelationGoogleAndUser(Base):
+    __tablename__ = "relations_google_and_users"
+    id_google = Column(String, primary_key = True, nullable = False)
+    user_id = Column(String(500), nullable = False)
+
+    def __str__(self):
+        return self.user_id
