@@ -14,6 +14,8 @@ from fastapi import APIRouter
 from datetime import datetime, timedelta
 import sys
 import os
+
+from starlette.status import HTTP_200_OK
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 from models.Models import *
 import uuid
@@ -377,7 +379,7 @@ async def loginGoogle(idGoogle:str, username:str, email:EmailStr):
                     'is_federated': user.is_federated})
 
 
-@router.delete('/deleteGoogle')
+@router.delete('/deleteGoogle/{idGoogle}')
 async def deleteGoogleUser(idGoogle):
     relation = session.query(RelationGoogleAndUser).filter(RelationGoogleAndUser.id_google == idGoogle).first()
     if not relation:
@@ -389,6 +391,7 @@ async def deleteGoogleUser(idGoogle):
         return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'That user does not exist in the database.')
     session.query(User).filter(User.user_id == user_id).delete()
     session.commit()
+    return JSONResponse(status_code = status.HTTP_200_OK, content= user_id)
     
 
     
