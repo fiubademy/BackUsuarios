@@ -88,6 +88,9 @@ async def loginGoogle(idGoogle, username, email):
 async def deleteGoogle(idGoogle):
     return await ApiCalls.deleteGoogleUser(idGoogle = idGoogle)
 
+async def setAvatar(user_id, numAvatar):
+    return await ApiCalls.set_avatar(user_id, numAvatar)
+
 
 Base.metadata.drop_all(test_engine)
 Base.metadata.create_all(test_engine)
@@ -331,4 +334,15 @@ def test_google_login_wrong_email():
     assert retornoLogin.status_code == status.HTTP_201_CREATED
     retornoLogin = asyncio.run(loginGoogle('idNoExistenteGoogle', 'Roberto Suarez', 'email@gmal.com'))
     assert retornoLogin.status_code == status.HTTP_401_UNAUTHORIZED
+    asyncio.run(deleteGoogle('idNoExistenteGoogle'))
+
+def test_set_avatar_user_not_existent():
+    retornoChange = asyncio.run(setAvatar('idUsuario', 2))
+    assert retornoChange.status_code == status.HTTP_404_NOT_FOUND
+
+
+def test_set_avatar_ok():
+    user_id = asyncio.run(run_post())["user_id"]
+    retornoChange = asyncio.run(setAvatar(user_id, 2))
+    assert retornoChange.status_code == status.HTTP_200_OK
     asyncio.run(deleteGoogle('idNoExistenteGoogle'))

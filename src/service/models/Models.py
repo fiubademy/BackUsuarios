@@ -21,6 +21,7 @@ class UserResponse(BaseModel):
     sub_level: Optional[int]
     is_blocked: str
     user_type: str
+    avatar: Optional[int]
 
 class User(Base):
     __tablename__ = "users"
@@ -34,6 +35,7 @@ class User(Base):
     is_blocked = Column(String(5), nullable=False)
     user_type = Column(String(20), nullable=False)
     is_federated = Column(String(5))
+    avatar = Column(Integer)
     __table_args__ = (
         CheckConstraint("NOT(password IS NULL AND is_federated != 'Y')"),
         CheckConstraint("NOT(password IS NOT NULL AND is_federated = 'Y')")

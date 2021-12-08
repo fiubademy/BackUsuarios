@@ -55,7 +55,8 @@ async def getUsers(page_num: int, emailFilter: Optional[str] = '', usernameFilte
                         'sub_level': user.sub_level,
                         'is_blocked': user.is_blocked,
                         'user_type': user.user_type,
-                        'is_federated': user.is_federated})
+                        'is_federated': user.is_federated,
+                        'avatar': user.avatar})
     if (count/PER_PAGE - int(count/PER_PAGE) == 0):
         num_pages = int(count/PER_PAGE)
     else:
@@ -80,7 +81,8 @@ async def getUser(user_id= ''):
             'sub_level': user.sub_level,
             'is_blocked': user.is_blocked,
             'user_type': user.user_type,
-            'is_federated': user.is_federated}
+            'is_federated': user.is_federated,
+            'avatar': user.avatar}
 
 @router.post('/get_token', response_model=str, status_code=status.HTTP_200_OK)
 async def getTokenForRecPasswd(email:str):
@@ -122,7 +124,8 @@ async def createUser(username: str, email: EmailStr, password: str):
                     sub_level = 0,
                     is_blocked = 'N',
                     user_type = 'USER',
-                    is_federated = 'N')
+                    is_federated = 'N',
+                    avatar = 0)
     session.add(newUser)
     try:
         session.commit()
@@ -137,7 +140,8 @@ async def createUser(username: str, email: EmailStr, password: str):
             'sub_level': newUser.sub_level,
             'is_blocked': newUser.is_blocked,
             'user_type': newUser.user_type,
-            'is_federated': newUser.is_federated}
+            'is_federated': newUser.is_federated,
+            'avatar': newUser.avatar}
 
 @router.post('/createAdmin', response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def createAdmin(username: str, email: EmailStr, password: str):
@@ -153,7 +157,8 @@ async def createAdmin(username: str, email: EmailStr, password: str):
                     sub_level = null(),
                     is_blocked = 'N',
                     user_type = 'ADMIN',
-                    is_federated = 'N')
+                    is_federated = 'N',
+                    avatar = null())
     session.add(newUser)
     try:
         session.commit()
@@ -168,7 +173,8 @@ async def createAdmin(username: str, email: EmailStr, password: str):
             'sub_level': newUser.sub_level,
             'is_blocked': newUser.is_blocked,
             'user_type': newUser.user_type,
-            'is_federated': newUser.is_federated}
+            'is_federated': newUser.is_federated,
+            'avatar': newUser.avatar}
 
 @router.delete('/{user_id}', status_code=status.HTTP_202_ACCEPTED)
 async def deleteUser(user_id):
@@ -206,7 +212,8 @@ async def patchUser(user_id: str, email: Optional[str] = None, username: Optiona
             'sub_level': user.sub_level,
             'is_blocked': user.is_blocked,
             'user_type': user.user_type,
-            'is_federated': user.is_federated}
+            'is_federated': user.is_federated,
+            'avatar': user.avatar}
 
 
 @router.patch('/changePassword/{user_id}')
@@ -338,7 +345,8 @@ async def loginGoogle(idGoogle:str, username:str, email:EmailStr):
                         sub_level = 0,
                         is_blocked = 'N',
                         user_type = 'USER',
-                        is_federated = 'Y')
+                        is_federated = 'Y',
+                        avatar = 0)
         relation = RelationGoogleAndUser(id_google = idGoogle, user_id = user_id)
 
         session.add(user)
@@ -357,7 +365,8 @@ async def loginGoogle(idGoogle:str, username:str, email:EmailStr):
                 'sub_level': user.sub_level,
                 'is_blocked': user.is_blocked,
                 'user_type': user.user_type,
-                'is_federated': user.is_federated})
+                'is_federated': user.is_federated,
+                'avatar': user.avatar})
     else:
         user_id = relation.user_id
         user = session.query(User).filter(User.user_id == user_id).first()
@@ -376,7 +385,8 @@ async def loginGoogle(idGoogle:str, username:str, email:EmailStr):
                     'sub_level': user.sub_level,
                     'is_blocked': user.is_blocked,
                     'user_type': user.user_type,
-                    'is_federated': user.is_federated})
+                    'is_federated': user.is_federated,
+                    'avatar': user.avatar})
 
 
 @router.delete('/deleteGoogle/{idGoogle}')
@@ -392,6 +402,22 @@ async def deleteGoogleUser(idGoogle):
     session.query(User).filter(User.user_id == user_id).delete()
     session.commit()
     return JSONResponse(status_code = status.HTTP_200_OK, content= user_id)
+
+
+@router.patch('/{user_id}/set_avatar/{num_avatar}')
+async def set_avatar(user_id: str, num_avatar: int):
+
+    try:
+        user = session.query(User).filter(User.user_id == user_id).filter(User.user_type == 'USER').first()
+    except NoResultFound as err:
+        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = "User with that id does not exist in the database.")
+    if not user:
+        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = "User with that id does not exist in the database.")
+
+    user.avatar = num_avatar
+    session.add(user)
+    session.commit()
+    return JSONResponse(status_code = status.HTTP_200_OK, content= "User's avatar has been set to " + str(num_avatar))
     
 
     
