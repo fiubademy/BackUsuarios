@@ -1,1 +1,1 @@
-python3 baseService/UserService.py
+uvicorn src.service.baseService.UserService:app --host 0.0.0.0 --port 8000
