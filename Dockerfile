@@ -7,6 +7,7 @@ WORKDIR /app
 RUN pip3 install -r requirements.txt
 EXPOSE 8000
 COPY Commands.sh /app/
-COPY src/service/. /app/
+RUN mkdir src
+COPY src/. /app/src
 CMD ./Commands.sh
 
