@@ -1,1 +1,1 @@
-docker run -p 8000:8000 user-service-image
+docker run -i -p 8000:8000 user-service-image
