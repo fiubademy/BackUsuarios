@@ -19,6 +19,7 @@ class UserResponse(BaseModel):
     latitude: Optional[float]
     longitude: Optional[float]
     sub_level: Optional[int]
+    sub_expire: Optional[str]
     is_blocked: str
     user_type: str
     avatar: Optional[int]
