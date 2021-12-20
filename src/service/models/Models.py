@@ -61,3 +61,15 @@ class RelationGoogleAndUser(Base):
 
     def __str__(self):
         return self.user_id
+
+
+class PremiumSubsPayments(Base):
+    __tablename__ = "premium_subs_payments"
+    user_id = Column(String, primary_key = True, nullable = False)
+    expiration_date = Column(DateTime, primary_key = True, nullable = False)
+
+
+class StandardSubPayments(Base):
+    __tablename__ = "standard_subs_payments"
+    user_id = Column(String, primary_key = True, nullable = False)
+    expiration_date = Column(DateTime, primary_key = True, nullable = False)

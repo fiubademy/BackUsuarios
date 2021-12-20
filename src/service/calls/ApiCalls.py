@@ -1,9 +1,9 @@
-from fastapi import status
+from fastapi import status, Body
 from typing import List, Optional
 from pydantic import EmailStr
 from starlette.responses import JSONResponse
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, DateTime, Float
+from sqlalchemy import Boolean, Column, ForeignKey, Integer, String, DateTime, Float, desc
 from sqlalchemy.sql import null
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -28,6 +28,7 @@ Session = None
 session = None
 engine = None
 
+
 def set_engine(engine_rcvd):
     global engine
     global Session
@@ -36,17 +37,49 @@ def set_engine(engine_rcvd):
     Session = sessionmaker(bind=engine)
     session = Session()
 
+
+def is_premium(user_id):
+    premium_expiration = session.query(PremiumSubsPayments).filter(PremiumSubsPayments.user_id == user_id).order_by(
+        desc(PremiumSubsPayments.expiration_date)).limit(1).first()
+    if not premium_expiration or premium_expiration.expiration_date < datetime.now():
+        return False
+    return True
+
+
+def is_standard(user_id):
+    standard_expiration = session.query(StandardSubPayments).filter(StandardSubPayments.user_id == user_id).order_by(
+        desc(StandardSubPayments.expiration_date)).limit(1).first()
+    if not standard_expiration or standard_expiration.expiration_date < datetime.now():
+        return False
+    return True
+
+
+def update_sub(user_id: str):
+    user = session.query(User).filter(User.user_id == user_id).first()
+    if is_premium(user_id):
+        user.sub_level = 2
+    elif is_standard(user_id):
+        user.sub_level = 1
+    else:
+        user.sub_level = 0
+    session.add(user)
+    session.commit()
+
+
+
 @router.get('/{page_num}', status_code=status.HTTP_200_OK)
 async def getUsers(page_num: int, emailFilter: Optional[str] = '', usernameFilter: Optional[str] = ''):
     mensaje = []
     try:
         count = session.query(User).filter(User.email.like("%"+emailFilter+"%")).filter(User.username.like("%"+usernameFilter+"%")).count()
-        users = session.query(User).filter(User.email.like("%"+emailFilter+"%")).filter(User.username.like("%"+usernameFilter+"%")).limit(PER_PAGE).offset((page_num-1) * PER_PAGE)
+        users = session.query(User).filter(User.email.like("%"+emailFilter+"%")).filter(
+            User.username.like("%"+usernameFilter+"%")).order_by(desc(User.username)).limit(PER_PAGE).offset((page_num-1) * PER_PAGE)
     except NoResultFound as err:
         return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content= 'No users found in page ' + str(page_num) + ' in the database.')
     if (users.count() == 0):
         return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content= 'No users found in page ' + str(page_num) + ' in the database.')
     for user in users:
+        update_sub(user.user_id)
         mensaje.append ({'user_id':user.user_id, 
                         'username':user.username, 
                         'email':user.email, 
@@ -63,6 +96,7 @@ async def getUsers(page_num: int, emailFilter: Optional[str] = '', usernameFilte
         num_pages = int(count/PER_PAGE)+1    
     return {'num_pages': num_pages,'content':mensaje}
 
+
 @router.get('/ID/{user_id}', response_model=UserResponse, status_code=status.HTTP_200_OK)
 async def getUser(user_id= ''):
     if user_id == '':
@@ -73,6 +107,7 @@ async def getUser(user_id= ''):
         user = session.query(User).filter(User.user_id == user_id).first()
     except NoResultFound as err:
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found.')
+    update_sub(user.user_id)
     return{'user_id':user.user_id, 
             'username':user.username, 
             'email':user.email, 
@@ -83,6 +118,7 @@ async def getUser(user_id= ''):
             'user_type': user.user_type,
             'is_federated': user.is_federated,
             'avatar': user.avatar}
+
 
 @router.post('/get_token', response_model=str, status_code=status.HTTP_200_OK)
 async def getTokenForRecPasswd(email:str):
@@ -109,6 +145,7 @@ async def getTokenForRecPasswd(email:str):
     session.add(token_for_users)
     session.commit()
     return token
+
 
 @router.post('/', response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def createUser(username: str, email: EmailStr, password: str):
@@ -143,6 +180,7 @@ async def createUser(username: str, email: EmailStr, password: str):
             'is_federated': newUser.is_federated,
             'avatar': newUser.avatar}
 
+
 @router.post('/createAdmin', response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def createAdmin(username: str, email: EmailStr, password: str):
     if len(password) < 8:
@@ -176,6 +214,7 @@ async def createAdmin(username: str, email: EmailStr, password: str):
             'is_federated': newUser.is_federated,
             'avatar': newUser.avatar}
 
+
 @router.delete('/{user_id}', status_code=status.HTTP_202_ACCEPTED)
 async def deleteUser(user_id):
     try:
@@ -187,6 +226,7 @@ async def deleteUser(user_id):
     session.query(User).filter(User.user_id == user_id).delete()
     session.commit()
     return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content='User ' + user_id + ' was deleted succesfully.')
+
 
 @router.patch('/{user_id}')
 async def patchUser(user_id: str, email: Optional[str] = None, username: Optional[str] = None):
@@ -256,21 +296,7 @@ async def recoverPassword(newPassword: str, token:str):
     session.query(TokensForUsers).filter(TokensForUsers.user_id == user.user_id).delete()
     session.commit()
     return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content = (user.username +'\'s password has been correctly changed.'))
-
-@router.patch('/{user_id}/set_sub')
-async def setSubscription(user_id: str, sub_level: int):
-    if sub_level > 2 or sub_level < 0:
-        return JSONResponse(status_code = status.HTTP_406_NOT_ACCEPTABLE, content = 'Sub Level ' + str(sub_level) + ' is not allowed. Sub levels are: 0 (Free), 1 (Standard), 2 (Premium)')
-    try:
-        user = session.query(User).filter(User.user_id == user_id).first()
-    except NoResultFound as err:
-        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'Error: User does not exist in the database.')
-    if not user:
-        return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content = 'User not available in the database.')
-    user.sub_level = sub_level
-    session.add(user)
-    session.commit()
-    return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content = (user.username +'\'s Sub Level has been correctly set.'))
+    
 
 @router.patch('/{user_id}/set_location')
 async def setLocation(user_id: str, latitude: float, longitude: float):
@@ -290,6 +316,7 @@ async def setLocation(user_id: str, latitude: float, longitude: float):
     session.commit()
     return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content = (user.username +'\'s location has been correctly set.'))
 
+
 @router.patch('/{user_id}/toggleBlock')
 async def toggleBlockUser(user_id: str):
     try:
@@ -307,6 +334,7 @@ async def toggleBlockUser(user_id: str):
     session.commit()
     return JSONResponse(status_code = status.HTTP_202_ACCEPTED, content = user.username +"'s block state has been toggled.")
 
+
 @router.post('/login')
 async def loginUser(email:str, password:str):
     try:
@@ -319,6 +347,7 @@ async def loginUser(email:str, password:str):
         return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content="Wrong password for that user.")
     return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content = user.user_id)
 
+
 @router.post('/loginAdmin')
 async def loginAdmin(email:str, password:str):
     try:
@@ -330,6 +359,7 @@ async def loginAdmin(email:str, password:str):
     if user.password != hashlib.sha256(password.encode()).hexdigest():
         return JSONResponse(status_code=status.HTTP_401_UNAUTHORIZED, content="Wrong password for that Admin user.")
     return JSONResponse(status_code=status.HTTP_202_ACCEPTED, content = user.user_id)
+
 
 @router.post('/loginGoogle')
 async def loginGoogle(idGoogle:str, username:str, email:EmailStr):
@@ -417,10 +447,31 @@ async def set_avatar(user_id: str, num_avatar: int):
     user.avatar = num_avatar
     session.add(user)
     session.commit()
-    return JSONResponse(status_code = status.HTTP_200_OK, content= "User's avatar has been set to " + str(num_avatar))
-    
+    return JSONResponse(status_code = status.HTTP_200_OK, content= "User's avatar has been set to " + str(num_avatar)) 
 
-    
+
+@router.post('/{user_id}/pay_sub')
+async def pay_sub(user_id: str, type_of_sub: int = Body(default=0, embed=True)):
+    if (type_of_sub == 0):
+        return JSONResponse(status_code = status.HTTP_200_OK, content = "No change has been made, type sent was 0(Free)")
+    elif (type_of_sub == 1):
+        last_expiration_date = session.query(StandardSubPayments).filter(StandardSubPayments.user_id == user_id).order_by(
+            desc(StandardSubPayments.expiration_date)).limit(1).first()
+        if not last_expiration_date:
+            session.add(StandardSubPayments(user_id = user_id, expiration_date = datetime.now()+timedelta(days = 30)))
+        else:
+            session.add(StandardSubPayments(user_id = user_id, expiration_date = max(datetime.now()+timedelta(days=30), last_expiration_date.expiration_date + timedelta(days = 30))))
+        return JSONResponse(status_code = status.HTTP_200_OK, content = "30 Days were added to Standard Sub.")
+    elif (type_of_sub == 2):
+        last_expiration_date = session.query(PremiumSubsPayments).filter(PremiumSubsPayments.user_id == user_id).order_by(
+            desc(PremiumSubsPayments.expiration_date)).limit(1).first()
+        if not last_expiration_date:
+            session.add(PremiumSubsPayments(user_id = user_id, expiration_date = datetime.now()+timedelta(days = 30)))
+        else:
+            session.add(PremiumSubsPayments(user_id = user_id, expiration_date = max(datetime.now()+timedelta(days = 30), last_expiration_date.expiration_date + timedelta(days=30))))
+        return JSONResponse(status_code = status.HTTP_200_OK, content = "30 Days were added to Standard Sub.")
+    else:
+        return JSONResponse(status_code = status.HTTP_422_UNPROCESSABLE_ENTITY, content = "Sub level must be 0 (Free), 1 (Standard), or 2 (Premium).")
 
 
     
