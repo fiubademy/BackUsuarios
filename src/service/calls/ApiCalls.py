@@ -66,6 +66,18 @@ def update_sub(user_id: str):
     session.commit()
 
 
+def get_expiration_date(user_id, sub_level):
+    if sub_level == 0:
+        return "Unlimited"
+    elif sub_level == 1:
+        sub = session.query(StandardSubPayments).filter(StandardSubPayments.user_id == user_id).order_by(desc(StandardSubPayments.expiration_date)).limit(1).first()
+        return sub.expiration_date.isoformat()
+    elif sub_level == 2:
+        sub = session.query(PremiumSubsPayments).filter(PremiumSubsPayments.user_id == user_id).order_by(desc(PremiumSubsPayments.expiration_date)).limit(1).first()
+        return sub.expiration_date.isoformat()
+    else:
+        return "Invalid data"
+
 
 @router.get('/{page_num}', status_code=status.HTTP_200_OK)
 async def getUsers(page_num: int, emailFilter: Optional[str] = '', usernameFilter: Optional[str] = ''):
@@ -80,12 +92,14 @@ async def getUsers(page_num: int, emailFilter: Optional[str] = '', usernameFilte
         return JSONResponse(status_code = status.HTTP_404_NOT_FOUND, content= 'No users found in page ' + str(page_num) + ' in the database.')
     for user in users:
         update_sub(user.user_id)
+        expiration_date = get_expiration_date(user.user_id, user.sub_level)
         mensaje.append ({'user_id':user.user_id, 
                         'username':user.username, 
                         'email':user.email, 
                         'latitude':user.latitude, 
                         'longitude': user.longitude, 
                         'sub_level': user.sub_level,
+                        'sub_expire': expiration_date,
                         'is_blocked': user.is_blocked,
                         'user_type': user.user_type,
                         'is_federated': user.is_federated,
@@ -108,12 +122,15 @@ async def getUser(user_id= ''):
     except NoResultFound as err:
         return JSONResponse(status_code=status.HTTP_404_NOT_FOUND, content='User ' + user_id + ' not found.')
     update_sub(user.user_id)
+    user = session.query(User).filter(User.user_id == user_id).first()
+    expiration_date = get_expiration_date(user.user_id, user.sub_level)
     return{'user_id':user.user_id, 
             'username':user.username, 
             'email':user.email, 
             'latitude':user.latitude, 
             'longitude': user.longitude, 
             'sub_level': user.sub_level,
+            'sub_expire': expiration_date,
             'is_blocked': user.is_blocked,
             'user_type': user.user_type,
             'is_federated': user.is_federated,

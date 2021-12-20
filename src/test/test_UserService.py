@@ -17,6 +17,7 @@ from calls import ApiCalls
 from baseService.DataBase import test_engine, Base
 from baseService.UserService import app
 import requests
+from datetime import datetime, timedelta
 
 client= TestClient(app)
 Base.metadata.drop_all(test_engine)
@@ -388,6 +389,7 @@ def test_sub_premium():
     get_user = client.get('/users/ID/'+user_id)
     assert get_user.status_code == status.HTTP_200_OK
     assert get_user.json()['sub_level'] == 2
+    assert get_user.json()['sub_expire'][:10] == (datetime.now()+timedelta(days=30)).isoformat()[:10]
     client.delete('/users/'+user_id)
 
 def test_sub_standard():
@@ -399,6 +401,8 @@ def test_sub_standard():
     get_user = client.get('/users/ID/'+user_id)
     assert get_user.status_code == status.HTTP_200_OK
     assert get_user.json()['sub_level'] == 1
+    print(get_user.json())
+    assert get_user.json()['sub_expire'][:10] == (datetime.now()+timedelta(days=30)).isoformat()[:10]
     client.delete('/users/'+user_id)
 
 
@@ -410,11 +414,13 @@ def test_sub_premium_overwrites_standard():
     get_user = client.get('/users/ID/'+user_id)
     assert get_user.status_code == status.HTTP_200_OK
     assert get_user.json()['sub_level'] == 1
+    assert get_user.json()['sub_expire'][:10] == (datetime.now()+timedelta(days=30)).isoformat()[:10]
     request = client.post('/users/' + user_id + '/pay_sub', data='{"type_of_sub":2}')
     assert request.status_code == status.HTTP_200_OK
     get_user = client.get('/users/ID/'+user_id)
     assert get_user.status_code == status.HTTP_200_OK
     assert get_user.json()['sub_level'] == 2
+    assert get_user.json()['sub_expire'][:10] == (datetime.now()+timedelta(days=30)).isoformat()[:10]
     client.delete('/users/'+user_id)
 
 
@@ -425,6 +431,7 @@ def test_without_payments_sub_is_free():
     get_user = client.get('/users/ID/'+user_id)
     assert get_user.status_code == status.HTTP_200_OK
     assert get_user.json()['sub_level'] == 0
+    assert get_user.json()['sub_expire'] == "Unlimited"
     client.delete('/users/'+user_id)
 
 
